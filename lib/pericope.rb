@@ -349,7 +349,6 @@ private
     for book in book_abbreviations
       rx = Regexp.new("\\b#{book[1]}\\b.? (#{ValidReference})", true)
       while (match = unmatched.match rx) # find all occurrences of pericopes in this book
-        #puts match.inspect
         length = match.end(0) - match.begin(0)
         
         # after matching "2 Peter" don't match "Peter" again as "1 Peter"
