@@ -213,7 +213,10 @@ class Pericope
     return false
   end
   
-  
+  def combine(array)
+
+  end
+
   
   def self.get_max_verse(book, chapter)
     id = (book * 1000000) + (chapter * 1000)
@@ -236,12 +239,13 @@ private
   
   def parse_reference(reference)
     reference = normalize_reference(reference)
-    (reference.nil? || reference.empty?) ? [] : parse_ranges(reference.split(/[,;]/))
+    (reference.nil? || reference.empty?) ? [] : parse_ranges(reference.split(/[,;]/).delete_if{|s| s.length==0})
   end
   
   def normalize_reference(reference)
-    [ [%r{(\d+)[".](\d+)},'\1:\2'],       # 12"5 and 12.5 -> 12:5
-      [%r{(\(|\))},''],                   # replace () -> , 
+    [ [%r{[".]},':'],                     # 12"5 and 12.5 -> 12:5
+      [%r{:\s*\(},':'],                   # replace any ( after a : with a : only
+      [%r{(\(|\))},','],                  # replace any remaining () with a , 
       [%r{(–|—)},'-'],                    # convert em dash and en dash to -
       [%r{[^0-9,:;\-–—]},'']              # remove everything but [0-9,;:-]
     ].each { |pattern, replacement| reference.gsub!(pattern, replacement) }
@@ -406,7 +410,9 @@ private
     recent_chapter = nil # e.g. in 12:1-8, remember that 12 is the chapter when we parse the 8
     recent_chapter = 1 if !self.book_has_chapters?
     ranges.map do |range|
+
       range = range.split('-') # parse the low end of a verse range and the high end separately
+
       range << range[0] if (range.length < 2) # treat 12:4 as 12:4-12:4
       lower_chapter_verse = range[0].split(':').map {|n| n.to_i} # parse "3:28" to [3,28]
       upper_chapter_verse = range[1].split(':').map {|n| n.to_i} # parse "3:28" to [3,28]
@@ -434,6 +440,7 @@ private
       Range.new(
         Pericope.get_id(book, lower_chapter_verse[0], lower_chapter_verse[1]),
         Pericope.get_id(book, upper_chapter_verse[0], upper_chapter_verse[1]))
+
     end
   end
   
@@ -554,7 +561,7 @@ private
   
   ValidReference = begin
     #note: this regular expression will include "optional" verses enclosed in parentheses by default                 
-    reference = '((\s*\d{1,3})(\s*[:\"\.]\s*\(?\s*\d{1,3}(a|b)?(\s*\))?(\s*(,|;| )\s*(\d{1,3}[:\"\.])?\s*\(?\s*\(?\s*\d{1,3}(a|b)?(\s*\))?)*)?(\s*(-|–|—)\s*(\s*\(?\s*\d{1,3}\s*[:\"\.])?(\d{1,3}(a|b)?)(\s*\))?(\s*(,|;| )\s*\(?\s*(\d{1,3}\s*[:\"\.])?\s*\d{1,3}(a|b)?(\s*\))?)*)*)'
+    reference = '((\s*\d{1,3})(\s*[:\"\.]\s*\(?\s*\d{1,3}(a|b)?(\s*\))?(\s*(,|;| )\s*(\d{1,3}[:\"\.])?\s*\(?\s*\(?\s*\d{1,3}(a|b)?(\s*\))?)*)?(\s*(-|–|—)\s*(\s*\(?\s*\d{1,3}\s*[:\"\.])?(\d{1,3}(a|b)?)(\s*\))?(\s*(,|;| )\s*\(?\s*(\d{1,3}\s*[:\"\.])?\s*\(?\d{1,3}(a|b)?(\s*\))?)*)*)'
   end
   
   
