@@ -11,7 +11,7 @@ class Pericope
               :original_string,
               :ranges
   
-  
+  @@book2RegExp = nil 
   
   def self.book_names
     @@book_names ||= ["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalm", "Proverbs", "Ecclesiastes", "Song of Songs", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel",  "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James", "1 Peter", "2 Peter", "1 John ", "2 John", "3 John", "Jude", "Revelation"]
@@ -367,14 +367,28 @@ private
     return ""
   end
 
+  def self.bookRegExps
+    if @@book2RegExp != nil
+      return @@book2RegExp
+    else
+      @@book2RegExp = []
+      for book in book_abbreviations
+        @@book2RegExp << [book, Regexp.new("\\b#{book[1]}\\b.? (#{ValidReference})", true)]
+      end
+    end
+    return @@book2RegExp
+  end
 
   # matches all valid Bible references in the supplied string
   # ! will not necessarily return references in order !
   def self.match_all(text, &block)
     matches = []
     unmatched = text
-    for book in book_abbreviations
-      rx = Regexp.new("\\b#{book[1]}\\b.? (#{ValidReference})", true)
+
+    bookRegExps()
+
+    for bookRxp in @@book2RegExp
+      rx = bookRxp[1]
       while (match = unmatched.match rx) # find all occurrences of pericopes in this book
 
         # calculate the unnecessary parens at the end of the statement
@@ -391,7 +405,7 @@ private
         # but keep the same number of characters in the string so indices work
         unmatched = match.pre_match + ("*" * length) + match.post_match
 
-        match.instance_variable_set('@book', book[0])
+        match.instance_variable_set('@book', bookRxp[0][0])
 
         if block_given?
           yield match
