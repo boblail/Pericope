@@ -1,5 +1,6 @@
 # coding: utf-8
 
+require 'set'
 require 'yaml'
 require 'pericope/version'
 
@@ -214,9 +215,15 @@ class Pericope
     end
     return false
   end
-  
-  def combine(array)
+ 
+  #TODO: make this so you can combine references from multiple books
+  def self.combine_from_same_book(lhs_pericope, rhs_pericope)
+    the_set = Set.new
 
+    the_set.merge(lhs_pericope.to_a)
+    the_set.merge(rhs_pericope.to_a)
+
+    return Pericope.new(the_set.to_a)
   end
 
   
