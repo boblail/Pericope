@@ -1,3 +1,6 @@
+# coding: utf-8
+
+require 'set'
 require 'yaml'
 require 'pericope/version'
 
@@ -9,7 +12,7 @@ class Pericope
               :original_string,
               :ranges
   
-  
+  @@book2RegExp = nil 
   
   def self.book_names
     @@book_names ||= ["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalm", "Proverbs", "Ecclesiastes", "Song of Songs", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel",  "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James", "1 Peter", "2 Peter", "1 John ", "2 John", "3 John", "Jude", "Revelation"]
@@ -212,8 +215,17 @@ class Pericope
     end
     return false
   end
-  
-  
+ 
+  #TODO: make this so you can combine references from multiple books
+  def self.combine_from_same_book(lhs_pericope, rhs_pericope)
+    the_set = Set.new
+
+    the_set.merge(lhs_pericope.to_a)
+    the_set.merge(rhs_pericope.to_a)
+
+    return Pericope.new(the_set.to_a)
+  end
+
   
   def self.get_max_verse(book, chapter)
     id = (book * 1000000) + (chapter * 1000)
@@ -236,13 +248,16 @@ private
   
   def parse_reference(reference)
     reference = normalize_reference(reference)
-    (reference.nil? || reference.empty?) ? [] : parse_ranges(reference.split(/[,;]/))
+    (reference.nil? || reference.empty?) ? [] : parse_ranges(reference.split(/[,;]/).delete_if{|s| s.length==0})
   end
   
   def normalize_reference(reference)
-    { %r{(\d+)[".](\d+)} => '\1:\2',       # 12"5 and 12.5 -> 12:5
-      %r{[^0-9,:;-]} => ''                 # remove everything but [0-9,;:-]
-    }.each {|pattern, replacement| reference.gsub!(pattern, replacement)}
+    [ [%r{[".]},':'],                     # 12"5 and 12.5 -> 12:5
+      [%r{:\s*\(},':'],                   # replace any ( after a : with a : only
+      [%r{(\(|\))},','],                  # replace any remaining () with a , 
+      [%r{(–|—)},'-'],                    # convert em dash and en dash to -
+      [%r{[^0-9,:;\-–—]},'']              # remove everything but [0-9,;:-]
+    ].each { |pattern, replacement| reference.gsub!(pattern, replacement) }
     reference
   end
   
@@ -338,22 +353,67 @@ private
     nil
   end
   
-  
-  
+  def self.get_unmatched_ending(match)
+    i      = 0
+    str    = match.to_s
+    stack  = []
+
+    str.each_char { |c| 
+      if c == '('
+        stack << c
+      elsif c == ')'
+        if stack.size() > 0
+          stack.pop()
+        else
+          return str[i..str.length-1] 
+        end
+      end
+      i = i + 1
+    }
+
+    return ""
+  end
+
+  def self.bookRegExps
+    if @@book2RegExp != nil
+      return @@book2RegExp
+    else
+      @@book2RegExp = []
+      for book in book_abbreviations
+        @@book2RegExp << [book, Regexp.new("\\b#{book[1]}\\b.? (#{ValidReference})", true)]
+      end
+    end
+    return @@book2RegExp
+  end
+
   # matches all valid Bible references in the supplied string
   # ! will not necessarily return references in order !
   def self.match_all(text, &block)
     matches = []
     unmatched = text
-    for book in book_abbreviations
-      rx = Regexp.new("\\b#{book[1]}\\b.? (#{ValidReference})", true)
+
+    bookRegExps()
+
+    for bookRxp in @@book2RegExp
+      rx = bookRxp[1]
       while (match = unmatched.match rx) # find all occurrences of pericopes in this book
-        length = match.end(0) - match.begin(0)
-        
+
+        # calculate the unnecessary parens at the end of the statement
+        unmatchedEnding = Pericope.get_unmatched_ending(match)
+        length = match.end(0) - match.begin(0) - unmatchedEnding.length
+        lengthFromBegin = match.end(0) - unmatchedEnding.length
+
+        # recalculate the matchdata based on the shortened expression
+        if unmatchedEnding.length > 0 
+          match = unmatched[0..lengthFromBegin - 1].match(rx)
+        end
+
         # after matching "2 Peter" don't match "Peter" again as "1 Peter"
         # but keep the same number of characters in the string so indices work
         unmatched = match.pre_match + ("*" * length) + match.post_match
-        match.instance_variable_set('@book', book[0])
+
+        match.instance_variable_set('@book', bookRxp[0][0])
+
         if block_given?
           yield match
         else
@@ -364,13 +424,18 @@ private
     block_given? ? text : matches
   end
   
-  
-  
   def parse_ranges(ranges)
+
+    if ranges == nil
+      return
+    end
+
     recent_chapter = nil # e.g. in 12:1-8, remember that 12 is the chapter when we parse the 8
     recent_chapter = 1 if !self.book_has_chapters?
     ranges.map do |range|
+
       range = range.split('-') # parse the low end of a verse range and the high end separately
+
       range << range[0] if (range.length < 2) # treat 12:4 as 12:4-12:4
       lower_chapter_verse = range[0].split(':').map {|n| n.to_i} # parse "3:28" to [3,28]
       upper_chapter_verse = range[1].split(':').map {|n| n.to_i} # parse "3:28" to [3,28]
@@ -398,6 +463,7 @@ private
       Range.new(
         Pericope.get_id(book, lower_chapter_verse[0], lower_chapter_verse[1]),
         Pericope.get_id(book, upper_chapter_verse[0], upper_chapter_verse[1]))
+
     end
   end
   
@@ -516,15 +582,9 @@ private
       22]       # Revelation      66
   end
   
-  
-  
   ValidReference = begin
-    chapter = '\d{1,3}' # matches 0-999
-    verse = '\d{1,3}[ab]?' # matches 0-999 with or without 'a' or 'b' afterward
-    chapter_verse = "#{chapter}(?:\\s?[.:\"]\\s?#{verse})?" # matches chapter with or without verse reference
-    chapter_verse_range = "(?:#{chapter_verse}(?:\\s?[\\&\\-]\\s?(?:(?:#{chapter_verse})|(?:#{verse})))?)"
-     # "(#{chapter}(?:[.:]#{verse})?(?:\\s?[\\&\\-]\\s?(?:#{verse}(?:[.:]\\d{1,3})?)?)" # chapter:verse reference
-    reference = "#{chapter_verse_range}(?:\\s?[,;]\\s?#{chapter_verse_range})*" # multiple chapter:verse references
+    #note: this regular expression will include "optional" verses enclosed in parentheses by default                 
+    reference = '(\(?(\s*\d{1,3})(\s*[:\"\.]\s*\(?\s*\d{1,3}(a|b)?(\s*\))?(\s*(,|;| )\s*(\d{1,3}[:\"\.])?\s*\(?\s*\(?\s*\d{1,3}(a|b)?(\s*\))?)*)?(\s*(-|–|—)\s*(\s*\(?\s*\d{1,3}\s*[:\"\.])?(\d{1,3}(a|b)?)(\s*\))?(\s*(,|;| )\s*\(?\s*(\d{1,3}\s*[:\"\.])?\s*\(?\d{1,3}(a|b)?(\s*\))?)*)*)'
   end
   
   

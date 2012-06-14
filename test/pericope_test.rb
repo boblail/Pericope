@@ -17,7 +17,13 @@ class PericopeTest < ActiveSupport::TestCase
     assert_equal 150, pericope.book_chapter_count
     assert_equal true, pericope.book_has_chapters?
   end
-  
+
+  test "combine" do
+    lhs = Pericope.new("gen 1")
+    rhs = Pericope.new("gen 2")
+    combined = Pericope.combine_from_same_book(lhs,rhs)
+    assert_equal combined.to_s,"Genesis 1-2"
+  end
   
   
   test "parsing single pericopes" do
@@ -90,6 +96,19 @@ class PericopeTest < ActiveSupport::TestCase
       ["phil 1:1-17,2:3-5,17"] => "Philippians 1:1-17, 2:3-5, 17",                      # test comma-separated ranges
       
       # test the values embedded in the pericope extraction
+      ["Leviticus (18:1–5) 19:9–18"] => "Leviticus 18:1-5, 19:9-18",
+      ["Matt 1:1-2, 2:1-10"] => "Matthew 1:1-2, 2:1-10",
+      ["Matt 1:1-2, (1-10)"] => "Matthew 1:1-2, 1-10",
+      ["Matt 1:1-2, (2:1-10)"] => "Matthew 1:1-2, 2:1-10",
+      ["Matt 1:1-2 (2:1-10)"] => "Matthew 1:1-2, 2:1-10",
+      ["Matt 1:1-2 (2:1-10)"] => "Matthew 1:1-2, 2:1-10",
+      ["Matt 1:(1-10) 5:1-12"] => "Matthew 1:1-10, 5:1-12",
+      ["Matt 1\"(1-10) 5:(1-12)"] => "Matthew 1:1-10, 5:1-12",
+      ["Matt 1\" (1-10) 5:(1-12)"] => "Matthew 1:1-10, 5:1-12",
+      ["Mark 2:23-28 (3:1-6"] => "Mark 2:23-28, 3:1-6",
+      ["Psalm 29 (2)"] => "Psalm 29",
+      ["Psalm 37:3–7a, 23–24, 39–40"] => "Psalm 37:3-7, 23-24, 39-40",
+      ["John 20:19–23"] => "John 20:19-23",
       ["2 Peter 4.1 "] => "2 Peter 3:1", # nb: chapter coercion
       ["(Jas. 1:13, 20) "] => "James 1:13, 20",
       ["jn 21:14, "] => "John 21:14",
@@ -130,6 +149,7 @@ class PericopeTest < ActiveSupport::TestCase
   test "converting arrays to pericopes" do
     tests = {
       "Genesis 1:1" => [1001001],
+      "John 20:19-23" => [43020019, 43020020, 43020021, 43020022, 43020023],
       "Psalm 1" => [19001001, 19001002, 19001003, 19001004, 19001005, 19001006],
       "Psalm 122:6-124:2" => [19122006, 19122007, 19122008, 19122009, 19123001, 19123002, 19123003, 19123004, 19124001, 19124002]
     }
