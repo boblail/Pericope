@@ -145,6 +145,10 @@ class PericopeTest < Minitest::Test
         assert_equal [r(1001001, 1001031)], Pericope.parse_reference(1, "1") # Genesis 1
       end
 
+      should "parse multiple chapters into ranges of verses in that chapter" do
+        assert_equal [r(1001001, 1001031), r(1003001, 1003024)], Pericope.parse_reference(1, "1; 3") # Genesis 1; 3
+      end
+
       should "parse multiple ranges into an array of ranges" do
         expected_ranges = [
           r(40003001),
@@ -155,7 +159,7 @@ class PericopeTest < Minitest::Test
 
         tests = [
           "3:1,3,4-5,7; 4:19",
-          "3:1, 3 ,4-5; 7,4:19"
+          "3:1, 3 ,4-5, 7;4:19"
         ]
 
         tests.each do |input|
