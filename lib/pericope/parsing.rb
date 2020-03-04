@@ -80,7 +80,8 @@ class Pericope
     end
 
     def parse_reference(book, reference)
-      parse_ranges(book, normalize_reference(reference).split(/[,;]/))
+      # Use positive lookahead to keep delimiter with the fragment that follows
+      parse_ranges(book, normalize_reference(reference).split(/(?=[,;])/))
     end
 
     def normalize_reference(reference)
@@ -93,7 +94,11 @@ class Pericope
       default_verse = nil
 
       ranges.map do |range|
+        range_delimiter, range = range[0], range[1..-1] if range =~ /^[,;]/
         range_begin_string, range_end_string = range.split("-")
+
+        # semicolon is used between chapters, even if it doesn't otherwise look it, e.g., Psalm 1; 3
+        default_chapter = default_verse = nil if range_delimiter == ";" && book_has_chapters?(book)
 
         # treat 12:4 as 12:4-12:4
         range_end_string ||= range_begin_string
